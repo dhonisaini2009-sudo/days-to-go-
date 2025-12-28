@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Days To Go</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      padding: 16px;
+      transition: background 0.4s, color 0.4s;
+    }
+
+    body.dark {
+      background: #121212;
+      color: #ffffff;
+    }
+
+    body.serif { font-family: "Times New Roman", serif; }
+    body.mono { font-family: monospace; }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 12px;
+      animation: fadeDown 0.6s;
+    }
+
+    input, select, button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      border-radius: 10px;
+      border: none;
+      font-size: 14px;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    button {
+      background: #000;
+      color: #fff;
+    }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
+    .row {
+      display: flex;
+      gap: 6px;
+    }
+
+    .row button {
+      background: #444;
+    }
+
+    .card {
+      background: #fff;
+      padding: 14px;
+      margin-top: 12px;
+      border-radius: 14px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      animation: slideUp 0.4s ease;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+    }
+
+    body.dark .card {
+      background: #1e1e1e;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .edit { background: #1976d2; }
+    .delete { background: #d32f2f; }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(15px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>📅 Days To Go</h2>
+
+<button onclick="toggleDark()">🌙 Dark Mode</button>
+
+<select onchange="changeFont(this.value)">
+  <option value="normal">Font: Normal</option>
+  <option value="serif">Font: Serif</option>
+  <option value="mono">Font: Monospace</option>
+</select>
+
+<input id="eventNameInput" placeholder="Event name">
+
+<select id="eventIconInput">
+  <option value="📘">📘 Study</option>
+  <option value="📝">📝 Exam</option>
+  <option value="🎂">🎂 Birthday</option>
+  <option value="✈️">✈️ Travel</option>
+  <option value="🏆">🏆 Goal</option>
+</select>
+
+<input id="eventDateInput" type="date">
+
+<div class="row">
+  <button onclick="quickDate(0)">Today</button>
+  <button onclick="quickDate(1)">Tomorrow</button>
+  <button onclick="quickDate(7)">+7 Days</button>
+</div>
+
+<button onclick="saveEvent()">Add / Update Event</button>
+
+<div id="eventList"></div>
+
+<script>
+  if ("Notification" in window) {
+    Notification.requestPermission();
+  }
+
+  const nameInput = document.getElementById("eventNameInput");
+  const dateInput = document.getElementById("eventDateInput");
+  const iconInput = document.getElementById("eventIconInput");
+  const listDiv = document.getElementById("eventList");
+
+  let events = JSON.parse(localStorage.getItem("events")) || [];
+  let editIndex = null;
+
+  function toggleDark() {
+    document.body.classList.toggle("dark");
+  }
+
+  function changeFont(type) {
+    document.body.classList.remove("serif", "mono");
+    if (type !== "normal") document.body.classList.add(type);
+  }
+
+  function quickDate(days) {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    dateInput.value = d.toISOString().split("T")[0];
+  }
+
+  function saveEvent() {
+    const name = nameInput.value.trim();
+    const date = dateInput.value;
+
+    if (name === "" || date === "") {
+      alert("Fill all fields");
+      return;
+    }
+
+    const data = {
+      name,
+      date,
+      icon: iconInput.value,
+      notified: false
+    };
+
+    if (editIndex !== null) {
+      events[editIndex] = data;
+      editIndex = null;
+    } else {
+      events.push(data);
+    }
+
+    nameInput.value = "";
+    dateInput.value = "";
+
+    localStorage.setItem("events", JSON.stringify(events));
+    render();
+  }
+
+  function editEvent(i) {
+    nameInput.value = events[i].name;
+    dateInput.value = events[i].date;
+    iconInput.value = events[i].icon;
+    editIndex = i;
+  }
+
+  function deleteEvent(i) {
+    events.splice(i, 1);
+    localStorage.setItem("events", JSON.stringify(events));
+    render();
+  }
+
+  function render() {
+    listDiv.innerHTML = "";
+
+    events.forEach((e, i) => {
+      const days = Math.ceil(
+        (new Date(e.date) - new Date()) / (1000 * 60 * 60 * 24)
+      );
+
+      const status =
+        days < 0 ? "Passed" :
+        days === 0 ? "Today" :
+        days + " days left";
+
+      if (days === 1 && !e.notified && Notification.permission === "granted") {
+        new Notification("Reminder", {
+          body: e.icon + " " + e.name + " is tomorrow!"
+        });
+        e.notified = true;
+        localStorage.setItem("events", JSON.stringify(events));
+      }
+
+      listDiv.innerHTML += `
+        <div class="card">
+          <b>${e.icon} ${e.name}</b><br>
+          ${status}
+          <div class="actions">
+            <button class="edit" onclick="editEvent(${i})">Edit</button>
+            <button class="delete" onclick="deleteEvent(${i})">Delete</button>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  render();
+</script>
+
+</body>
+</html>
